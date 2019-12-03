@@ -29,3 +29,13 @@ experiments$validationAccuracyOverTime <- lapply(experiments$validationAccuracyO
 experiments$neuralNetHiddenStructure <- lapply(experiments$neuralNetHiddenStructure, convert)
 experiments$inputShape <- as.numeric(experiments$inputShape)
 experiments$outputShape <- as.numeric(experiments$outputShape)
+
+mean_diff_over_time <- function(vector){
+    diffs <- vector[-1] - head(vector, -1)
+    mean(diffs)
+}
+
+std_diff_over_time <- function(vector){
+    diffs <- vector[-1] - head(vector, -1)
+    sd(diffs)
+}
