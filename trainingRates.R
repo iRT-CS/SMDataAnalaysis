@@ -38,8 +38,10 @@ averageTrainingRate <- function(shape) {
   return(difference / length)
 }
 
-finalAccuracy <- function(shape) {
-  return epochToAccuracy(length, shape)
+shapeToFinalAccuracy <- function(shape) {
+  length <- length(shapeToAccuracyList(shape))
+  finalAccuracy <- epochToAccuracy(length, shape)
+  return (finalAccuracy)
 }
 
 # GGPLOT STUFF
@@ -56,6 +58,7 @@ library(ggplot2)
 allShapes = experiments$neuralNetHiddenStructure
 neuronCounts = as.numeric(lapply(allShapes, sum))
 averageRates = as.numeric(lapply(allShapes, averageTrainingRate)) * 100
+finalRates = as.numeric(lapply(allShapes, shapeToFinalAccuracy)) * 100
 neuronsRateTable = data.frame(neuronCounts, averageRates)
 neuronCountToTrainingRate <- ggplot(neuronsRateTable, aes(x=neuronCounts, y=averageRates)) + geom_point() + geom_smooth(method="lm") + xlab("Total Neurons") + ylab("Training Rate (%)")
 
@@ -67,16 +70,19 @@ layerCountToTrainingRate <- ggplot(layersRateTable, aes(x=layerCounts, y=average
 # GRAPH WEIGHT COUNT VS. TRAINING RATE
 # NOTE: This only includes HIDDEN WEIGHTS (input and output weights not included...)
 shapeToWeightCount <- function(shape) {
-  accumulator = shape[1] + shape[length(shape)]
+  accumulator = 2 * shape[1] + shape[length(shape)]
   for (val in c(1:(length(shape) - 1))) {
     accumulator = accumulator + (shape[val] * shape[val + 1])
   }
   return(accumulator)
 }
-
+# weight count vs training rate
 weightCounts = as.numeric(lapply(allShapes, shapeToWeightCount))
 weightsRateTable = data.frame(weightCounts, averageRates)
 weightCountToTrainingRate <- ggplot(weightsRateTable, aes(x=weightCounts, y=averageRates)) + geom_point() + geom_smooth(method="lm") + xlab("Total Weights in Structure") + ylab("Training Rate (%)")
+# weight count vs. final accuracy
+weightsFinalTable = data.frame(weightCounts, finalRates)
+weightCountToFinalRate <- ggplot(weightsFinalTable, aes(x=weightCounts, y=finalRates)) + geom_point() + xlab("Total Weights in Structure") + ylab("FinalAccuracy (%)")
 
 # GRAPH AVERAGE LAYER SIZE VS. TRAINING RATE
 averageLayerSize = as.numeric(lapply(allShapes, mean))
