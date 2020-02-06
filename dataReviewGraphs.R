@@ -63,12 +63,25 @@ shapeToFinalAccuracy <- function(shape) {
   return (validations[length(validations)])
 }
 
-# GGPLOT                    
+shapeToFirstAccuracy <- function(shape) {
+  rowIndex <- getRowIndex(shape)
+  validations <- experiments$validationAccuracyOverTime[[rowIndex]]
+  return (validations[1])
+}
+
+# GGPLOT STUFF
+# GRAPH NAMES:
+# neuronCountToTrainingRate
+# layerCountToTrainingRate
+# weightCountToTrainingRate
+# layerSizeToTrainingRate
+
 options(scipen=999)
 library(ggplot2)
 
 allShapes = experiments$neuralNetHiddenStructure
 averageRates = as.numeric(lapply(allShapes, averageTrainingRate)) * 100
+firstRates = as.numeric(lapply(allShapes, shapeToFirstAccuracy)) * 100
 finalRates = as.numeric(lapply(allShapes, shapeToFinalAccuracy)) * 100
 
 
@@ -83,7 +96,7 @@ layersRateTable = data.frame(layerCounts, averageRates)
 layerCountToTrainingRate <- ggplot(layersRateTable, aes(x=layerCounts, y=averageRates)) + geom_point() + xlab("Total Layers in Structure") + ylab("Training Rate (%)")
 
 # GRAPH WEIGHT COUNT VS. TRAINING RATE
-# Function that gives weight count based on shape
+# NOTE: This only includes HIDDEN WEIGHTS (input and output weights not included...)
 shapeToWeightCount <- function(shape) {
   shape <- list(shape)
   if (length(shape[[1]]) == 1) {
@@ -113,11 +126,19 @@ weightCountToFinalRate <- ggplot(weightsFinalTable, aes(x=weightCounts, y=finalR
 # MAKE TABLES OF TOP 10 and WORST 10 STRUCTURES
 library(plyr)
 unlistedShapes <- lapply(allShapes, unlist)
-shapesTable <- data.frame(allShapes, finalRates, ncol = 2)
 shapesRatesTable <- do.call(rbind.fill, lapply(lapply(lapply(unlistedShapes, data.frame), t), data.frame))
-shapesRatesTable <- cbind(shapesRatesTable, averageRates, finalRates)
+
+getEpochCount <- function(shape) {
+  rowIndex <- getRowIndex(shape)
+  validations <- experiments$validationAccuracyOverTime[[rowIndex]]
+  return (length(validations))
+}
+epochCounts <- as.numeric(lapply(allShapes, getEpochCount))
+shapesRatesTable <- cbind(shapesRatesTable, firstRates, finalRates, epochCounts, averageRates)
 
 order.training <- order(shapesRatesTable$averageRates, decreasing = TRUE)
 shapesRatesbyTraining <- shapesRatesTable[order.training,]
 order.final <- order(shapesRatesTable$finalRates, decreasing = TRUE)
 shapesRatesbyFinal <- shapesRatesTable[order.final, ]
+
+
