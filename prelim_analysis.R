@@ -1,5 +1,21 @@
 require(ggplot2)
 require(tidyverse)
+
+require("mongolite")
+# 
+m <- mongo(collection = "Experiments", db = "ShallowMind", url = "mongodb://rkapur2021:okay4kench635shallowmind.pingry.org:27017")
+
+# datasets <- read.csv(file="C:/Users/emmet/Desktop/NeuralNetworks/datasets.csv")
+experiments <- read.csv(file="C:/Users/emmet/Desktop/NeuralNetworks/experiments.csv")
+# neural_nets <- read.csv(file="C:/Users/emmet/Desktop/NeuralNetworks/neuralNets.csv")
+
+# example. structure [1,1,1] so cubic
+
+# structure = experiments[7,3]
+# training_over_time = as.character(experiments[7,8])
+# training_over_time = gsub("\\[|\\]", "", training_over_time)
+# training_over_time = 1 - (as.numeric(strsplit(training_over_time, ",")[[1]]))
+
 convert <- function(x) {
   training_over_time = as.character(x)
   training_over_time = gsub("\\[|\\]", "", training_over_time)
@@ -14,30 +30,24 @@ convertShapes <- function(x) {
   abs(training_over_time)
 }
 
-experiments <- read.csv(file="C:/Users/emmet/Desktop/experiments1-30.csv")
 experiments$trainingAccuracyOverTime <- lapply(experiments$trainingLossOverTime, convert)
 experiments$validationAccuracyOverTime <- lapply(experiments$validationLossOverTime, convert)
 experiments$neuralNetHiddenStructure <- lapply(experiments$neuralNetHiddenStructure, convertShapes)
 experiments$inputShape <- as.numeric(experiments$inputShape)
 experiments$outputShape <- as.numeric(experiments$outputShape)
 
-hiddenStructures <- lapply(experiments$neuralNetHiddenStructure, convertShapes)
-hiddenStructuresBroken <- lapply(experiments$neuralNetHiddenStructure, convert)
-
-getRowIndex <- function(shape) {
-  rowIndex <- Position(function(x) identical(x, shape), experiments$neuralNetHiddenStructure)
-  if (is.na(rowIndex)) {return(-1)}
-  return(rowIndex)
-}
-
-shapeToAccuracyList <- function(shape) {
-  rowIndex <- getRowIndex(shape)
-  if (rowIndex == -1) {return(-1)}
-  return(accuracyList <- experiments$trainingAccuracyOverTime[[rowIndex]])
-}
+row <- 1110
+training <- data.frame(epoch = seq(1,length(experiments$trainingAccuracyOverTime[[row]]), 1), trainAcc = experiments$trainingAccuracyOverTime[[row]]) 
+validation <- data.frame(epoch = seq(1,length(experiments$validationAccuracyOverTime[[row]]), 1), valAcc = experiments$validationAccuracyOverTime[[row]]) 
+graph <- ggplot() + 
+  geom_line(data = training, aes(x = epoch, y = trainAcc), color = "blue") +
+  geom_line(data = validation, aes(x = epoch, y = valAcc), color = "red") +
+  labs(title=, x="Epoch", y="Accuracy") # Adding scatterplot geom (layer1) and smoothing geom (layer2).
+graph
 
 epochToAccuracy <- function(epoch, shape) {
-  accuracyList <- shapeToAccuracyList(shape)
+  rowIndex <- Position(function(x) identical(x, shape), experiments$neuralNetHiddenStructure)
+  accuracyList <- experiments$trainingAccuracyOverTime[[rowIndex]]
   if (epoch > 0 & epoch <= length(accuracyList)) { 
     return(accuracyList[epoch])
   }
@@ -46,122 +56,31 @@ epochToAccuracy <- function(epoch, shape) {
   }
 }
 
-averageTrainingRate <- function(shape) {
-  initialAccuracy = epochToAccuracy(1, shape)
-  if (initialAccuracy == -1) {
-    return(-1)
-  }
-  length <- length(shapeToAccuracyList(shape))
-  finalAccuracy <- epochToAccuracy(length, shape)
-  difference <- finalAccuracy - initialAccuracy
-  return(difference / length)
-}
-
-shapeToFinalAccuracy <- function(shape) {
-  rowIndex <- getRowIndex(shape)
-  validations <- experiments$validationAccuracyOverTime[[rowIndex]]
-  return (validations[length(validations)])
-}
-
-shapeToFirstAccuracy <- function(shape) {
-  rowIndex <- getRowIndex(shape)
-  validations <- experiments$validationAccuracyOverTime[[rowIndex]]
-  return (validations[1])
-}
-
-# GGPLOT STUFF
-# GRAPH NAMES:
-# neuronCountToTrainingRate
-# layerCountToTrainingRate
-# weightCountToTrainingRate
-# layerSizeToTrainingRate
-
-options(scipen=999)
-library(ggplot2)
-library("viridis")           
-
-allShapes = experiments$neuralNetHiddenStructure
-averageRates = as.numeric(lapply(allShapes, averageTrainingRate)) * 100
-firstRates = as.numeric(lapply(allShapes, shapeToFirstAccuracy)) * 100
-finalRates = as.numeric(lapply(allShapes, shapeToFinalAccuracy)) * 100
-
-
-# GRAPH TOTAL NUMBER OF NEURONS VS. TRAINING RATE
-neuronCounts = as.numeric(lapply(allShapes, sum))
-neuronsRateTable = data.frame(neuronCounts, averageRates)
-neuronsRateTable2 = data.frame(neuronCounts, finalRates)
-neuronCountToTrainingRate <- ggplot(neuronsRateTable, aes(x=neuronCounts, y=averageRates)) + geom_point() + geom_smooth(method="lm") + xlab("Total Neurons") + ylab("Training Rate (%)")
-neuronCountToFinalRate <- ggplot(neuronsRateTable, aes(x=neuronCounts, y=finalRates)) + geom_point() + geom_smooth(method="lm") + xlab("Total Neurons") + ylab("Final Accuracy (%)")
-
-# GRAPH TOTAL NUMBER OF LAYERS VS. TRAINING RATE
-layerCounts = as.numeric(lapply(allShapes, length))
-layersRateTable = data.frame(layerCounts, averageRates)
-layerCountToTrainingRate <- ggplot(layersRateTable, aes(x=layerCounts, y=averageRates)) + geom_point() + xlab("Total Layers in Structure") + ylab("Training Rate (%)")
-
-# GRAPH WEIGHT COUNT VS. TRAINING RATE
-# NOTE: This only includes HIDDEN WEIGHTS (input and output weights not included...)
-shapeToWeightCount <- function(shape) {
-  shape <- list(shape)
-  if (length(shape[[1]]) == 1) {
-    return (3 * shape[[1]][1])
-  }
-  accumulator = 2 * shape[[1]][1] + shape[[1]][length(shape[[1]])]
-  for (val in c(1:(length(shape[[1]]) - 1))) {
-    accumulator = accumulator + (shape[[1]][val] * shape[[1]][val + 1])
-  }
-  return(accumulator)
-}
-# weight count vs training rate
-weightCounts <- as.numeric(lapply(allShapes, shapeToWeightCount))
-weightsRateTable <- data.frame(weightCounts, averageRates)
-weightCountToTrainingRate <- ggplot(weightsRateTable, aes(x=weightCounts, y=averageRates)) + geom_point() + geom_smooth(method="lm") + xlab("Total Weights in Structure") + ylab("Training Rate (%)")
-# weight count vs. final accuracy
-weightsFinalTable <- data.frame(weightCounts, finalRates)
-# TRIPLE BAND GRAPH!!!!!!!!!!!!! compares total number of weghts to the final accuracy of the structure
-weightCountToFinalRate <- ggplot(weightsFinalTable, aes(x=weightCounts, y=finalRates)) + geom_point() + xlab("Total Weights in Structure") + ylab("FinalAccuracy (%)")
-
-# GRAPH AVERAGE LAYER SIZE VS. TRAINING RATE
-averageLayerSize <- as.numeric(lapply(allShapes, mean))
-layerSizeRateTable <- data.frame(averageLayerSize, finalRates)
-layerSizeToFinalRate <- ggplot(layerSizeRateTable, aes(x=averageLayerSize, y=finalRates, group=averageLayerSize)) + geom_point() + geom_boxplot() + xlab("Average Layer Size") + ylab("Final Accuracy (%)")
-
-# STRUCTURE RANKINGS
-library(plyr)
-unlistedShapes <- lapply(allShapes, unlist)
-shapesRatesTable <- do.call(rbind.fill, lapply(lapply(lapply(unlistedShapes, data.frame), t), data.frame))
-
-getEpochCount <- function(shape) {
-  rowIndex <- getRowIndex(shape)
-  validations <- experiments$validationAccuracyOverTime[[rowIndex]]
-  return (length(validations))
-}
-epochCounts <- as.numeric(lapply(allShapes, getEpochCount))
-shapesRatesTable <- cbind(shapesRatesTable, firstRates, finalRates, epochCounts, averageRates)
-
-order.training <- order(shapesRatesTable$averageRates, decreasing = TRUE)
-shapesRatesbyTraining <- shapesRatesTable[order.training,]
-order.final <- order(shapesRatesTable$finalRates, decreasing = TRUE)
-shapesRatesbyFinal <- shapesRatesTable[order.final, ]
-
-order.firstLayer <- order(shapesRatesTable$X1, decreasing = TRUE)
-shapesRatesbyFirstLayer <- shapesRatesTable[order.firstLayer,]
-
-# LAYER COUNT TO CONNECTIVITY
 mean_connectivity <- function(struct) {
-  if (length(list(struct)[[1]]) == 1) {
-    return (3)
-  }
   copy <- sapply(struct, function(i) i)
   struct <- struct[-1]
   copy <- copy[-length(copy)]
   a <- mean(copy*struct)
   return(a)
 }
-meanConnectivity <- as.numeric(lapply(allShapes, mean_connectivity))
-layersConnectivity <- data.frame(layerCounts, meanConnectivity)
-layersToConnectivity <- ggplot(layersConnectivity, aes(x=layerCounts, y=meanConnectivity, group=layerCounts)) + geom_point() + geom_boxplot() + xlab("Total Layers in Structure") + ylab("Connectivity (Connections/Node)")
 
-# NEURON COUNT TO OVERFITTING
+mean_diff_over_time <- function(vector) {
+  vector <- unlist(vector)
+  diffs <- vector[-1] - head(vector, -1)
+  mean(diffs)
+}
+
+std_diff_over_time <- function(vector){
+  vector <- unlist(vector)
+  diffs <- vector[-1] - head(vector, -1)
+  sd(diffs)
+}
+
+experiments$avg_training_rate <- lapply(experiments$trainingAccuracyOverTime, mean_diff_over_time)
+experiments$training_volatility <- lapply(experiments$trainingAccuracyOverTime, std_diff_over_time)
+
+# Coefficient of overfitting for an entire neural net 
+# Returns list of 2 elements: first, coefficient of overfitting for neural net over the course of the epochs, and then, average coefficient of overfitting (so average over the epochs)
 coeff_overfit_nn <- function(shape) {
   rowIndex <- Position(function(x) identical(x, shape), experiments$neuralNetHiddenStructure)
   
@@ -171,35 +90,18 @@ coeff_overfit_nn <- function(shape) {
   return(list(coeff_over_epochs, mean(coeff_over_epochs)))
 }
 
-coeff_overfit_epoch <- function(shape, epoch) {
+coeff_overfit_epoch <- function(epoch, shape) {
   rowIndex <- Position(function(x) identical(x, shape), experiments$neuralNetHiddenStructure)
   training_accuracy_per_row <- experiments$trainingAccuracyOverTime[[rowIndex]]
   validation_accuracy_per_row <- experiments$validationAccuracyOverTime[[rowIndex]]
   overfit = training_accuracy_per_row - validation_accuracy_per_row
-  return(overfit[epoch])
+  abs(overfit)
 }
 
-coeff_overfit_final <- function(shape, epoch) {
-  return(coeff_overfit_epoch(shape, getEpochCount(shape)))
-}
+# coeff_overfit_nn(c(1,0))
+experiments$overfitting <- lapply(experiments$neuralNetHiddenStructure, coeff_overfit_nn)
 
-meanNodes <- mean(neuronCounts)
-meanAccuracy <- mean(finalRates)
+# graph overfitting vs. complexity of neural net (increasing structures)
 
-neuronOverfitting <- as.numeric(lapply(allShapes, coeff_overfit_final))
-neuronsToOverfit <- data.frame(neuronCounts, neuronOverfitting)
-
-# NODES TO OVERFITTING HERE --- USED IN PRESENTATION
-Accuracy <- finalRates
-neuronsToOverfitting <- ggplot(neuronsToOverfit, aes(x=neuronCounts, y=neuronOverfitting, color = Accuracy)) +
-  scale_color_viridis(option = "A")+
-  geom_point() +
-  xlab("Total Nodes in Structure") +
-  ylab("Overfitting")
-
-overfittingToFinal <- data.frame(neuronOverfitting, finalRates)
-overfittingToFinalRates <- ggplot(overfittingToFinal, aes(x=neuronOverfitting, y=finalRates)) +
-  geom_point() +
-  xlab("Overfitting") +
-  ylab("Final Accuracy ( %)")
-
+# mean training rate vs. connectivity
+# plot different functions vs. connectivity
